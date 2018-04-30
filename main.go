@@ -1,7 +1,6 @@
 package main
 
-
 func main() {
-    cli := CLI{}
-    cli.Run()
+	cli := CLI{}
+	cli.Run()
 }

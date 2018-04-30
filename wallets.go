@@ -1,95 +1,95 @@
 package main
 
 import (
-    "bytes"
-    "crypto/elliptic"
-    "encoding/gob"
-    "fmt"
-    "io/ioutil"
-    "log"
-    "os"
+	"bytes"
+	"crypto/elliptic"
+	"encoding/gob"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
 )
 
 const walletFile = "wallet_%s.dat"
 
 type Wallets struct {
-    Wallets map[string]*Wallet
+	Wallets map[string]*Wallet
 }
 
-func NewWallets(nodeID string) (*Wallets, error){
-    wallets := Wallets{}
-    wallets.Wallets = make(map[string]*Wallet)
+func NewWallets(nodeID string) (*Wallets, error) {
+	wallets := Wallets{}
+	wallets.Wallets = make(map[string]*Wallet)
 
-    err := wallets.LoadFromFile(nodeID)
+	err := wallets.LoadFromFile(nodeID)
 
-    return &wallets, err
+	return &wallets, err
 }
 
 func (ws *Wallets) CreateWallet() string {
-    wallet := NewWallet()
-    address := fmt.Sprintf("%s", wallet.GetAddress())
+	wallet := NewWallet()
+	address := fmt.Sprintf("%s", wallet.GetAddress())
 
-    ws.Wallets[address] = wallet
+	ws.Wallets[address] = wallet
 
-    return address
+	return address
 }
 
 func (ws *Wallets) GetAddresses() []string {
-    var addresses []string
+	var addresses []string
 
-    for address := range ws.Wallets {
-        addresses = append(addresses, address)
-    }
+	for address := range ws.Wallets {
+		addresses = append(addresses, address)
+	}
 
-    return addresses
+	return addresses
 }
 
 func (ws Wallets) GetWallet(address string) Wallet {
-    return *ws.Wallets[address]
+	return *ws.Wallets[address]
 }
 
 func (ws *Wallets) LoadFromFile(nodeID string) error {
-    walletFile := fmt.Sprintf(walletFile, nodeID)
-    if _, err := os.Stat(walletFile); os.IsNotExist(err) {
-        fmt.Println("Error %s while accessing walletFile %s", err, walletFile)
-        return err
-    }
+	walletFile := fmt.Sprintf(walletFile, nodeID)
+	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
+		fmt.Println("Error %s while accessing walletFile %s", err, walletFile)
+		return err
+	}
 
-    fileContent, err := ioutil.ReadFile(walletFile)
-    if err != nil {
-        fmt.Println("Error %s while reading the fileContent of %s", err, walletFile)
-        log.Panic(err)
-    }
+	fileContent, err := ioutil.ReadFile(walletFile)
+	if err != nil {
+		fmt.Println("Error %s while reading the fileContent of %s", err, walletFile)
+		log.Panic(err)
+	}
 
-    fmt.Println("fileContent is %s", fileContent)
+	fmt.Println("fileContent is %s", fileContent)
 
-    var wallets Wallets
-    gob.Register(elliptic.P256())
-    decoder := gob.NewDecoder(bytes.NewReader(fileContent))
-    err = decoder.Decode(&wallets)
-    if err != nil {
-        log.Panic(err)
-    }
+	var wallets Wallets
+	gob.Register(elliptic.P256())
+	decoder := gob.NewDecoder(bytes.NewReader(fileContent))
+	err = decoder.Decode(&wallets)
+	if err != nil {
+		log.Panic(err)
+	}
 
-    ws.Wallets = wallets.Wallets
+	ws.Wallets = wallets.Wallets
 
-    return nil
+	return nil
 }
 
 func (ws Wallets) SaveToFile(nodeID string) {
-    var content bytes.Buffer
-    walletFile := fmt.Sprintf(walletFile, nodeID)
+	var content bytes.Buffer
+	walletFile := fmt.Sprintf(walletFile, nodeID)
 
-    gob.Register(elliptic.P256())
+	gob.Register(elliptic.P256())
 
-    encoder := gob.NewEncoder(&content)
-    err := encoder.Encode(ws)
-    if err != nil {
-        log.Panic(err)
-    }
+	encoder := gob.NewEncoder(&content)
+	err := encoder.Encode(ws)
+	if err != nil {
+		log.Panic(err)
+	}
 
-    err = ioutil.WriteFile(walletFile, content.Bytes(), 0644)
-    if err != nil {
-        log.Panic(err)
-    }
+	err = ioutil.WriteFile(walletFile, content.Bytes(), 0644)
+	if err != nil {
+		log.Panic(err)
+	}
 }

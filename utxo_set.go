@@ -1,193 +1,191 @@
-
-
 package main
 
 import (
-    "encoding/hex"
-    "log"
+	"encoding/hex"
+	"log"
 
-    "github.com/boltdb/bolt"
+	"github.com/boltdb/bolt"
 )
 
 const utxoBucket = "chainstate"
 
 type UTXOSet struct {
-    Blockchain *Blockchain;
+	Blockchain *Blockchain
 }
 
 func (u UTXOSet) FindSpendableOutputs(pubkeyHash []byte, amount int) (int, map[string][]int) {
-    unspentOutputs := make(map[string][]int)
-    accumulated := 0
-    db := u.Blockchain.db
+	unspentOutputs := make(map[string][]int)
+	accumulated := 0
+	db := u.Blockchain.db
 
-    err := db.View(func(tx *bolt.Tx) error {
-        b := tx.Bucket([]byte(utxoBucket))
-        c := b.Cursor()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(utxoBucket))
+		c := b.Cursor()
 
-        for k, v := c.First(); k != nil; k, v = c.Next() {
-            txID := hex.EncodeToString(k)
-            outs := DeserializeOutputs(v)
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			txID := hex.EncodeToString(k)
+			outs := DeserializeOutputs(v)
 
-            for outIdx, out := range outs.Outputs {
-                if out.IsLockedWithKey(pubkeyHash) && accumulated < amount {
-                    accumulated += out.Value
-                    unspentOutputs[txID] = append(unspentOutputs[txID], outIdx)
-                }
-            }
-        }
-        
-    return nil
-    
-    })
+			for outIdx, out := range outs.Outputs {
+				if out.IsLockedWithKey(pubkeyHash) && accumulated < amount {
+					accumulated += out.Value
+					unspentOutputs[txID] = append(unspentOutputs[txID], outIdx)
+				}
+			}
+		}
 
-    if err != nil {
-        log.Panic(err)
-    }
+		return nil
 
-    return accumulated, unspentOutputs
+	})
+
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return accumulated, unspentOutputs
 }
 
 func (u UTXOSet) FindUTXO(pubkeyHash []byte) []TXOutput {
-    var UTXOs []TXOutput
-    db := u.Blockchain.db
+	var UTXOs []TXOutput
+	db := u.Blockchain.db
 
-    err := db.View(func(tx *bolt.Tx) error {
-        b := tx.Bucket([]byte(utxoBucket))
-        c := b.Cursor()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(utxoBucket))
+		c := b.Cursor()
 
-        for k, v := c.First(); k != nil; k, v = c.Next() {
-            outs := DeserializeOutputs(v)
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			outs := DeserializeOutputs(v)
 
-            for _, out := range outs.Outputs {
-                if out.IsLockedWithKey(pubkeyHash) {
-                    UTXOs = append(UTXOs, out)
-                }
-            }
-        }
-        
-        return nil
-    })
+			for _, out := range outs.Outputs {
+				if out.IsLockedWithKey(pubkeyHash) {
+					UTXOs = append(UTXOs, out)
+				}
+			}
+		}
 
-    if err != nil {
-        log.Panic(err)
-    }
+		return nil
+	})
 
-    return UTXOs
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return UTXOs
 }
 
 func (u UTXOSet) CountTransactions() int {
-    db := u.Blockchain.db
-    counter := 0
-    
-    err := db.View(func(tx *bolt.Tx) error {
-        b := tx.Bucket([]byte(utxoBucket))
-        c := b.Cursor()
+	db := u.Blockchain.db
+	counter := 0
 
-        for k, _ := c.First(); k != nil; k, _ = c.Next() {
-            counter++
-        }
-        
-        return nil
-    })
-    if err != nil {
-        log.Panic(err)
-    }
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(utxoBucket))
+		c := b.Cursor()
 
-    return counter
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			counter++
+		}
+
+		return nil
+	})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return counter
 }
 
 func (u UTXOSet) Reindex() {
-    db := u.Blockchain.db
-    bucketName := []byte(utxoBucket)
+	db := u.Blockchain.db
+	bucketName := []byte(utxoBucket)
 
-    err := db.Update(func(tx *bolt.Tx) error {
-        err := tx.DeleteBucket(bucketName)
-        if err != nil && err != bolt.ErrBucketNotFound {
-            log.Panic(err)
-        }
+	err := db.Update(func(tx *bolt.Tx) error {
+		err := tx.DeleteBucket(bucketName)
+		if err != nil && err != bolt.ErrBucketNotFound {
+			log.Panic(err)
+		}
 
-        _, err = tx.CreateBucket(bucketName)
-        if err != nil {
-            log.Panic(err)
-        }
-        
-        return nil
-    
-    })
+		_, err = tx.CreateBucket(bucketName)
+		if err != nil {
+			log.Panic(err)
+		}
 
-    if err != nil {
-        log.Panic(err)
-    }
+		return nil
 
-    UTXO := u.Blockchain.FindUTXO()
+	})
 
-    err = db.Update(func(tx *bolt.Tx) error {
-        b := tx.Bucket(bucketName)
+	if err != nil {
+		log.Panic(err)
+	}
 
-        for txID, outs := range UTXO {
-            key, err := hex.DecodeString(txID)
-            if err != nil {
-                log.Panic(err)
-            }
+	UTXO := u.Blockchain.FindUTXO()
 
-            err = b.Put(key, outs.Serialize())
-            if err != nil {
-                log.Panic(err)
-            }
-        }      
-        return nil
-    })
+	err = db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketName)
+
+		for txID, outs := range UTXO {
+			key, err := hex.DecodeString(txID)
+			if err != nil {
+				log.Panic(err)
+			}
+
+			err = b.Put(key, outs.Serialize())
+			if err != nil {
+				log.Panic(err)
+			}
+		}
+		return nil
+	})
 }
 
 func (u UTXOSet) Update(block *Block) {
-    db := u.Blockchain.db
+	db := u.Blockchain.db
 
-    err := db.Update(func(tx *bolt.Tx) error {
-        b := tx.Bucket([]byte(utxoBucket))
-        
-        for _, tx := range block.Transactions {
-            if tx.IsCoinbase() == false {
-                for _, vin := range tx.Vin {
-                    updatedOuts := TXOutputs{}
-                    outsBytes := b.Get(vin.Txid)
-                    outs := DeserializeOutputs(outsBytes)
+	err := db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(utxoBucket))
 
-                    for outIdx, out := range outs.Outputs {
-                        if outIdx != vin.Vout {
-                            updatedOuts.Outputs = append(updatedOuts.Outputs, out)
-                        }
-                    }
+		for _, tx := range block.Transactions {
+			if tx.IsCoinbase() == false {
+				for _, vin := range tx.Vin {
+					updatedOuts := TXOutputs{}
+					outsBytes := b.Get(vin.Txid)
+					outs := DeserializeOutputs(outsBytes)
 
-                    if len(updatedOuts.Outputs) == 0 {
-                        err := b.Delete(vin.Txid)
-                        if err != nil {
-                            log.Panic(err)
-                        }
-                    } else {
-                        err := b.Put(vin.Txid, updatedOuts.Serialize())
-                        if err != nil {
-                            log.Panic(err)
-                        }
-                    }
-                }
+					for outIdx, out := range outs.Outputs {
+						if outIdx != vin.Vout {
+							updatedOuts.Outputs = append(updatedOuts.Outputs, out)
+						}
+					}
 
-            }
+					if len(updatedOuts.Outputs) == 0 {
+						err := b.Delete(vin.Txid)
+						if err != nil {
+							log.Panic(err)
+						}
+					} else {
+						err := b.Put(vin.Txid, updatedOuts.Serialize())
+						if err != nil {
+							log.Panic(err)
+						}
+					}
+				}
 
-            newOutputs := TXOutputs{}
-            for _, out := range tx.Vout {
-                newOutputs.Outputs = append(newOutputs.Outputs, out)
-            }
+			}
 
-            err := b.Put(tx.ID, newOutputs.Serialize())
-            if err != nil {
-                log.Panic(err)
-            }
-        }
+			newOutputs := TXOutputs{}
+			for _, out := range tx.Vout {
+				newOutputs.Outputs = append(newOutputs.Outputs, out)
+			}
 
-        return nil
-    })
+			err := b.Put(tx.ID, newOutputs.Serialize())
+			if err != nil {
+				log.Panic(err)
+			}
+		}
 
-    if err != nil {
-        log.Panic(err)
-    }
+		return nil
+	})
+
+	if err != nil {
+		log.Panic(err)
+	}
 }
